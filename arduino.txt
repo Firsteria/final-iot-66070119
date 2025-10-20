@@ -1,0 +1,105 @@
+#include <WiFiS3.h>
+#include <PubSubClient.h>
+#include <Adafruit_SHT31.h> // Library สำหรับ SHT31
+
+// --- 1. ตั้งค่า (แก้ไขส่วนนี้) ---
+const char* ssid = "First"; // ⬅️ ชื่อ Hotspot (ถูกต้องแล้ว)
+const char* password = "38110455";   // ⬅️ รหัสผ่าน Hotspot (ถูกต้องแล้ว)
+
+// ⬇️⬇️⬇️ --- จุดที่แก้ไข --- ⬇️⬇️⬇️
+// 2. เปลี่ยน IP ของ RPi เป็น Broker สาธารณะ
+const char* mqtt_server = "broker.hivemq.com"; 
+const int   mqtt_port = 1883; // ⬅️ ใช้พอร์ต 1883 (ห้ามใช้ 8884)
+
+// 3. ตั้งชื่อ Topic (ต้องเอาชื่อนี้ไปใส่ในเว็บ)
+const char* topic_sensor = "final-66070119/sensor"; 
+// ⬆️⬆️⬆️ --------------------- ⬆️⬆️⬆️
+
+// --- ตัวแปร Global ---
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
+Adafruit_SHT31 sht31 = Adafruit_SHT31();
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial); 
+  
+  // 1. เริ่มต้น SHT31
+  if (!sht31.begin(0x44)) { 
+    Serial.println("Couldn't find SHT31 sensor!");
+    while (1) delay(1);
+  }
+
+  // 2. เชื่อมต่อ WiFi
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected!");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  // 3. ตั้งค่า MQTT Broker
+  mqttClient.setServer(mqtt_server, mqtt_port);
+}
+
+// ฟังก์ชันสำหรับเชื่อมต่อ MQTT ใหม่หากหลุด
+void reconnect_mqtt() {
+  while (!mqttClient.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    
+    // ⬇️⬇️⬇️ --- จุดที่แก้ไข --- ⬇️⬇️⬇️
+    // เปลี่ยน Client ID เป็นชื่อใหม่ที่ไม่ซ้ำใคร
+    String clientId = "Arduino-66070119-";
+    clientId += String(random(0xffff), HEX); // สุ่มเลขต่อท้าย
+    
+    if (mqttClient.connect(clientId.c_str())) { 
+    // ⬆️⬆️⬆️ --------------------- ⬆️⬆️⬆️
+      
+      Serial.println("connected");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000); 
+    }
+  }
+}
+
+void loop() {
+  // (ส่วน Loop ที่เหลือใช้โค้ดเดิมได้เลย)
+  if (!mqttClient.connected()) {
+    reconnect_mqtt();
+  }
+  mqttClient.loop(); 
+
+  float temp = sht31.readTemperature();
+  float humi = sht31.readHumidity();
+
+  if (isnan(temp) || isnan(humi)) {
+    Serial.println("Failed to read from SHT31 sensor!");
+    return;
+  }
+  
+  // 3.1 แปลงค่า float เป็น string
+  char tempString[8];
+  char humiString[8];
+  dtostrf(temp, 4, 2, tempString);
+  dtostrf(humi, 4, 2, humiString);
+
+  // 3.2 สร้าง payload
+  String payload = String(tempString) + "," + String(humiString);
+
+  // 3.3 ส่งข้อมูล
+  Serial.print("Publishing to topic '");
+  Serial.print(topic_sensor);
+  Serial.print("': ");
+  Serial.println(payload);
+  
+  mqttClient.publish(topic_sensor, payload.c_str()); 
+
+  delay(5000); 
+}
