@@ -1,0 +1,87 @@
+import time
+import paho.mqtt.client as mqtt
+from RPLCD.i2c import CharLCD
+
+# --- ตั้งค่า ---
+# ใส่ Address ที่หาได้จาก i2cdetect (เช่น 0x27 หรือ 0x3F)
+LCD_I2C_ADDRESS = 0x27 
+
+# --- MQTT Configuration (ตามที่คุณต้องการ) ---
+MQTT_BROKER = "localhost" # Broker อยู่ในเครื่องนี้เอง
+MQTT_PORT = 1883
+MQTT_TOPIC = "kmitl/iot/66070273/sensor" # Topic เดียว
+
+# ตัวแปรสำหรับเก็บค่าล่าสุด
+current_temp = "N/A"
+current_humi = "N/A"
+
+# --- ตั้งค่าจอ LCD ---
+lcd = CharLCD('PCF8574', LCD_I2C_ADDRESS)
+lcd.clear()
+lcd.write_string("Connecting...")
+
+# --- ฟังก์ชันสำหรับ MQTT ---
+
+def on_connect(client, userdata, flags, rc):
+    print(f"Connected to MQTT with result code {rc}")
+    # จอง Topic เดียวที่ต้องการรับข้อมูล
+    client.subscribe(MQTT_TOPIC)
+    print(f"Subscribed to topic: {MQTT_TOPIC}")
+
+def on_message(client, userdata, msg):
+    global current_temp, current_humi
+    
+    # แปลงข้อมูล (payload) ที่เป็น bytes ให้เป็น string
+    payload_str = msg.payload.decode('utf-8')
+    print(f"Received data: {payload_str}")
+    
+    # ตรวจสอบว่ามาจาก Topic ที่ถูกต้อง (เผื่อไว้)
+    if msg.topic == MQTT_TOPIC:
+        try:
+            # แยกข้อมูลที่คั่นด้วยลูกน้ำ (,)
+            # เช่น "25.50,60.20"
+            parts = payload_str.split(',')
+            
+            if len(parts) == 2:
+                # .strip() เพื่อลบช่องว่างที่อาจติดมา
+                current_temp = parts[0].strip()
+                current_humi = parts[1].strip()
+                
+                # อัปเดตจอ
+                update_lcd()
+            else:
+                print("Invalid data format received.")
+                
+        except Exception as e:
+            print(f"Error processing message: {e}")
+
+# --- ฟังก์ชันอัปเดตจอ (เหมือนเดิม) ---
+def update_lcd():
+    lcd.clear()
+    
+    # บรรทัดที่ 1: แสดงอุณหภูมิ
+    lcd.write_string(f"Temp: {current_temp} C")
+    
+    # บรรทัดที่ 2: แสดงความชื้น
+    lcd.cursor_pos = (1, 0) # ย้าย cursor ไปบรรทัดที่ 2, คอลัมน์ที่ 0
+    lcd.write_string(f"Humi: {current_humi} %")
+
+# --- ส่วนหลัก (Main) ---
+client = mqtt.Client()
+client.on_connect = on_connect
+client.on_message = on_message
+
+try:
+    # ใช้ Port จากตัวแปรที่ตั้งไว้
+    client.connect(MQTT_BROKER, MQTT_PORT, 60) 
+    print("MQTT Client started. Waiting for data...")
+    client.loop_start()
+    
+    while True:
+        time.sleep(1)
+
+except KeyboardInterrupt:
+    print("Stopping...")
+    lcd.clear()
+    lcd.write_string("Stopped.")
+    client.loop_stop()
