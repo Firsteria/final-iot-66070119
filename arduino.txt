@@ -2,16 +2,16 @@
 #include <PubSubClient.h>
 #include <Adafruit_SHT31.h> // Library สำหรับ SHT31
 
-// --- 1. ตั้งค่า (แก้ไขส่วนนี้) ---
-const char* ssid = "First"; // ⬅️ ชื่อ Hotspot (ถูกต้องแล้ว)
-const char* password = "38110455";   // ⬅️ รหัสผ่าน Hotspot (ถูกต้องแล้ว)
 
-// ⬇️⬇️⬇️ --- จุดที่แก้ไข --- ⬇️⬇️⬇️
-// 2. เปลี่ยน IP ของ RPi เป็น Broker สาธารณะ
+const char* ssid = "First"; 
+const char* password = "38110455";   
+
+
+
 const char* mqtt_server = "broker.hivemq.com"; 
-const int   mqtt_port = 1883; // ⬅️ ใช้พอร์ต 1883 (ห้ามใช้ 8884)
+const int   mqtt_port = 1883; 
 
-// 3. ตั้งชื่อ Topic (ต้องเอาชื่อนี้ไปใส่ในเว็บ)
+// ตั้งชื่อ Topic 
 const char* topic_sensor = "final-66070119/sensor"; 
 // ⬆️⬆️⬆️ --------------------- ⬆️⬆️⬆️
 
@@ -46,13 +46,12 @@ void setup() {
   mqttClient.setServer(mqtt_server, mqtt_port);
 }
 
-// ฟังก์ชันสำหรับเชื่อมต่อ MQTT ใหม่หากหลุด
+
 void reconnect_mqtt() {
   while (!mqttClient.connected()) {
     Serial.print("Attempting MQTT connection...");
     
-    // ⬇️⬇️⬇️ --- จุดที่แก้ไข --- ⬇️⬇️⬇️
-    // เปลี่ยน Client ID เป็นชื่อใหม่ที่ไม่ซ้ำใคร
+    
     String clientId = "Arduino-66070119-";
     clientId += String(random(0xffff), HEX); // สุ่มเลขต่อท้าย
     
@@ -70,7 +69,7 @@ void reconnect_mqtt() {
 }
 
 void loop() {
-  // (ส่วน Loop ที่เหลือใช้โค้ดเดิมได้เลย)
+  
   if (!mqttClient.connected()) {
     reconnect_mqtt();
   }
@@ -84,16 +83,16 @@ void loop() {
     return;
   }
   
-  // 3.1 แปลงค่า float เป็น string
+  // แปลงค่า float เป็น string
   char tempString[8];
   char humiString[8];
   dtostrf(temp, 4, 2, tempString);
   dtostrf(humi, 4, 2, humiString);
 
-  // 3.2 สร้าง payload
+  // สร้าง payload
   String payload = String(tempString) + "," + String(humiString);
 
-  // 3.3 ส่งข้อมูล
+  // ส่งข้อมูล
   Serial.print("Publishing to topic '");
   Serial.print(topic_sensor);
   Serial.print("': ");
